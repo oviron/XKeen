@@ -4057,6 +4057,28 @@ proxy_stop() {
     fi
 }
 
+# Проверки, прерывающие запуск, выполняются до остановки прокси-клиента.
+# Иначе опечатка в xkeen.json, конфликт имён политик, резервная копия в
+# каталоге конфигурации Xray или повреждённый бинарный файл ядра оставляют
+# роутер и без прокси, и без правил: proxy_stop снимает правила и гасит
+# ядро раньше, чем proxy_start доходит до валидации.
+# Каждая проверка идёт в подоболочке, потому что log_error_terminal
+# завершает процесс. Причина пишется в системный журнал: внутренние
+# вызовы restart перенаправляют вывод в /dev/null.
+proxy_preflight() {
+    [ "$1" = "on" ] || [ "$start_auto" = "on" ] || return 0
+    for _pf_check in \
+        "validate_xkeen_json|xkeen.json" \
+        "check_policy_name_conflict|имена политик в xkeen.json" \
+        "check_xray_backups|резервные копии в каталоге конфигурации Xray" \
+        "info_health_binary|бинарные файлы прокси-клиента"
+    do
+        ( "${_pf_check%%|*}" ) && continue
+        log_error_router "Перезапуск отменён: не пройдена проверка '${_pf_check#*|}'"
+        log_error_terminal "Перезапуск отменён, состояние прокси-клиента не изменено"
+    done
+}
+
 # Менеджер команд
 _cmd_rc=0
 case "$1" in
@@ -4099,7 +4121,7 @@ case "$1" in
             print_dscp_force_proxy_status
         fi
         ;;
-    restart) proxy_stop; proxy_start "$2"; _cmd_rc=$? ;;
+    restart) proxy_preflight "$2"; proxy_stop; proxy_start "$2"; _cmd_rc=$? ;;
     cold_start)
         # Подстраховка: переписываем PID guard'а на свой ($$) на случай,
         # если caller-S05xkeen умер до того, как успел _set_coldstart_pid "$!".
