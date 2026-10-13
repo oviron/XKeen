@@ -136,11 +136,12 @@ parse_auto_opt() {
 # Self-heal пакетов (opkg-форк + опциональная установка curl/jq/ip-full/conntrack/
 # iptables/ipset/ca-bundle/coreutils-uname/coreutils-nohup) пропускается для
 # команд, не зависящих от статуса пакетов: -sbt — тик балансировщика по
-# расписанию cron, может вызываться раз в минуту — и help/meta-ключей.
+# расписанию cron, может вызываться раз в минуту, -check только читает
+# состояние и обязан отвечать быстро — и help/meta-ключей.
 # Запуск без аргументов сюда же: он тоже лишь показывает справку. Для
 # всех остальных команд поведение не изменилось.
 case "$1" in
-    ""|-sbt|-h|-help|-v|-version|-about|-ad|-donate|-af|-feedback) ;;
+    ""|-sbt|-check|-h|-help|-v|-version|-about|-ad|-donate|-af|-feedback) ;;
     *)
         _load_packages_info
         _ensure_installed_packages
@@ -1551,6 +1552,11 @@ while [ $# -gt 0 ]; do
 
         -status)    # Состояние XKeen
             "$initd_file" status || xkeen_rc=1
+        ;;
+
+
+        -check)    # Проверка прозрачного перехвата трафика
+            tests_intercept_check || xkeen_rc=$?
         ;;
 
 
